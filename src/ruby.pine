@@ -2,7 +2,7 @@
 // © nuniesmith
 
 //@version=6
-indicator("Ruby", overlay = true, max_labels_count = 500)
+indicator("Ruby", overlay = true, max_labels_count = 500, max_boxes_count = 500, max_lines_count = 500)
 
 // ==================================================================================
 // 📊 DASHBOARD SETTINGS
@@ -454,6 +454,15 @@ plotshape(show_ib and ib_breakout_up, title="IB Break Up", style=shape.circle, l
 plotshape(show_ib and ib_breakout_dn, title="IB Break Down", style=shape.circle, location=location.abovebar, color=color.new(color.orange, 0), size=size.tiny)
 plotshape(show_squeeze and squeeze_fired, title="Squeeze Fired", style=shape.diamond, location=location.belowbar, color=color.new(color.yellow, 0), size=size.small)
 
+// Breakout Strength Meter (0–100%)
+// Components: wave ratio strength (40%), volume surge (30%), squeeze state (15%), trend alignment (15%)
+vol_surge_raw = volume / nz(ta.sma(volume, 20), volume)
+vol_surge_score = math.min(vol_surge_raw / 2.0, 1.0) * 30.0
+wave_ratio_score = math.min(math.abs(current_ratio_avg) / 3.0, 1.0) * 40.0
+squeeze_score = squeeze_fired ? 15.0 : squeeze_on ? 10.0 : 0.0
+trend_align_score = (in_uptrend or in_downtrend) and strong_trend_aligned ? 15.0 : (in_uptrend or in_downtrend) ? 7.5 : 0.0
+breakout_strength = math.round(wave_ratio_score + vol_surge_score + squeeze_score + trend_align_score, 1)
+
 // Plot breakout levels
 plot(show_orb and orb_complete ? orb_high : na, "ORB High", color=color.new(color.green, 50), linewidth=1, style=plot.style_linebr)
 plot(show_orb and orb_complete ? orb_low : na, "ORB Low", color=color.new(color.red, 50), linewidth=1, style=plot.style_linebr)
@@ -622,16 +631,17 @@ bearish_candle = f_detect_bearish_candle_pattern()
 
 trend_speed_factor = math.abs(current_ratio_avg) > min_wave_ratio ? 1.0 : math.abs(current_ratio_avg) > min_wave_ratio * 0.7 ? 0.7 : math.abs(current_ratio_avg) > min_wave_ratio * 0.5 ? 0.4 : 0.0
 htf_bias_factor = include_sr ? (in_uptrend and (long_bias_1m or long_bias_5m) ? (long_bias_1m and long_bias_5m ? 1.0 : 0.5) : in_downtrend and (short_bias_1m or short_bias_5m) ? (short_bias_1m and short_bias_5m ? 1.0 : 0.5) : 0.0) : 0.0
+squeeze_factor = squeeze_fired ? 1.0 : squeeze_on ? 0.5 : 0.0
 
 velocity_change = ta.change(normalized_velocity, momentum_lookback)
 
 signal_quality_score = 0.0
 if in_uptrend
-    signal_quality_score := ((vol_percentile > 0.2 and vol_percentile < 0.7 ? 1.5 : 0.5) + (normalized_velocity > 0 ? 1.0 : 0) + (velocity_change > 0 ? 0.5 : 0) + trend_speed_factor * 0.5 + htf_bias_factor * 0.5) / 4.0
+    signal_quality_score := ((vol_percentile > 0.2 and vol_percentile < 0.7 ? 1.5 : 0.5) + (normalized_velocity > 0 ? 1.0 : 0) + (velocity_change > 0 ? 0.5 : 0) + trend_speed_factor * 0.5 + htf_bias_factor * 0.5 + squeeze_factor * 0.5) / 4.5
 else if in_downtrend
-    signal_quality_score := ((vol_percentile > 0.2 and vol_percentile < 0.7 ? 1.5 : 0.5) + (normalized_velocity < 0 ? 1.0 : 0) + (velocity_change < 0 ? 0.5 : 0) + trend_speed_factor * 0.5 + htf_bias_factor * 0.5) / 4.0
+    signal_quality_score := ((vol_percentile > 0.2 and vol_percentile < 0.7 ? 1.5 : 0.5) + (normalized_velocity < 0 ? 1.0 : 0) + (velocity_change < 0 ? 0.5 : 0) + trend_speed_factor * 0.5 + htf_bias_factor * 0.5 + squeeze_factor * 0.5) / 4.5
 else
-    signal_quality_score := ((vol_percentile < 0.3 ? 1.5 : 0.5) + (math.abs(normalized_velocity) < 0.5 ? 1.0 : 0) + (math.abs(velocity_change) < 0.2 ? 0.5 : 0) + trend_speed_factor * 0.5 + htf_bias_factor * 0.5) / 4.0
+    signal_quality_score := ((vol_percentile < 0.3 ? 1.5 : 0.5) + (math.abs(normalized_velocity) < 0.5 ? 1.0 : 0) + (math.abs(velocity_change) < 0.2 ? 0.5 : 0) + trend_speed_factor * 0.5 + htf_bias_factor * 0.5 + squeeze_factor * 0.5) / 4.5
 
 high_quality = signal_quality_score >= signal_quality_threshold
 
@@ -647,8 +657,8 @@ volume_ok = not volume_filter or volume > volume_sma_20 * min_volume_threshold
 
 lowest_low_length  = ta.lowest(low, length)
 highest_high_length = ta.highest(high, length)
-final_buy_raw  = (bottom or (lowest_low_length == low[1] and close > open)) and (in_uptrend or not require_trend_alignment) and high_quality and volume_ok and vol_within_range and strong_trend_aligned and math.abs(current_ratio_avg) >= min_wave_ratio * 0.7
-final_sell_raw = (top or (highest_high_length == high[1] and close < open)) and (in_downtrend or not require_trend_alignment) and high_quality and volume_ok and vol_within_range and strong_trend_aligned and math.abs(current_ratio_avg) >= min_wave_ratio * 0.7
+final_buy_raw  = (bottom or (lowest_low_length == low[1] and close > open) or (squeeze_fired and close > open and in_uptrend)) and (in_uptrend or not require_trend_alignment) and high_quality and volume_ok and vol_within_range and strong_trend_aligned and (math.abs(current_ratio_avg) >= min_wave_ratio * 0.7 or squeeze_fired)
+final_sell_raw = (top or (highest_high_length == high[1] and close < open) or (squeeze_fired and close < open and in_downtrend)) and (in_downtrend or not require_trend_alignment) and high_quality and volume_ok and vol_within_range and strong_trend_aligned and (math.abs(current_ratio_avg) >= min_wave_ratio * 0.7 or squeeze_fired)
 
 var int last_buy = 0
 var int last_sell = 0
@@ -706,6 +716,8 @@ if show_entry_labels
 // Entry zones (fixed - no more ghost boxes)
 var box support_zone = na
 var box resistance_zone = na
+var label support_label = na
+var label resistance_label = na
 
 if show_entry_zones
     if barstate.islast
@@ -726,6 +738,20 @@ if show_entry_zones
             box.set_lefttop(resistance_zone, bar_index[20], resistance_top)
             box.set_rightbottom(resistance_zone, bar_index, resistance_bottom)
 
+        // Price labels inside entry zone boxes
+        support_mid = (support_bottom + support_top) / 2
+        resistance_mid = (resistance_bottom + resistance_top) / 2
+        if na(support_label)
+            support_label := label.new(bar_index - 10, support_mid, "S: " + str.tostring(support_bottom, "#.####"), color = color.new(color.aqua, 100), textcolor = color.new(color.green, 30), style = label.style_label_center, size = size.small)
+        else
+            label.set_xy(support_label, bar_index - 10, support_mid)
+            label.set_text(support_label, "S: " + str.tostring(support_bottom, "#.####"))
+        if na(resistance_label)
+            resistance_label := label.new(bar_index - 10, resistance_mid, "R: " + str.tostring(resistance_top, "#.####"), color = color.new(color.yellow, 100), textcolor = color.new(color.red, 30), style = label.style_label_center, size = size.small)
+        else
+            label.set_xy(resistance_label, bar_index - 10, resistance_mid)
+            label.set_text(resistance_label, "R: " + str.tostring(resistance_top, "#.####"))
+
 // ==================================================================================
 // 📊 DASHBOARD TABLE
 // ==================================================================================
@@ -740,12 +766,12 @@ if show_dashboard and barstate.islast
     dn_c       = color.red
     neu_c      = color.silver
 
-    var table dash = table.new(dash_pos, 4, 25, bgcolor = bg_color, border_width = 1, border_color = color.gray, frame_color = color.gray)
+    var table dash = table.new(dash_pos, 4, 28, bgcolor = bg_color, border_width = 1, border_color = color.gray, frame_color = color.gray)
 
-    table.clear(dash, 0, 0, 3, 24)
+    table.clear(dash, 0, 0, 3, 27)
 
     // Header (compact)
-    table.cell(dash, 0, 0, "RUBY", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.normal)
+    table.cell(dash, 0, 0, "RUBY v2.1 – NT8 Sync", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.normal)
     table.merge_cells(dash, 0, 0, 3, 0)
     int row = 1
 
@@ -816,6 +842,13 @@ if show_dashboard and barstate.islast
         prev_day_dist = ((close - prev_day_low) / (prev_day_high - prev_day_low)) * 100
         table.cell(dash, 2, row, "PD:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
         table.cell(dash, 3, row, str.tostring(math.round(prev_day_dist, 0)) + "%", bgcolor = bg_color, text_color = prev_day_dist > 60 ? up_c : prev_day_dist < 40 ? dn_c : neu_c, text_size = size.small)
+        row += 1
+        table.cell(dash, 0, row, "Str:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        str_col = breakout_strength >= 70 ? up_c : breakout_strength >= 40 ? color.orange : dn_c
+        table.cell(dash, 1, row, str.tostring(math.round(breakout_strength, 0)) + "%", bgcolor = bg_color, text_color = str_col, text_size = size.small)
+        str_label = breakout_strength >= 70 ? "🔥" : breakout_strength >= 40 ? "〰️" : "❄️"
+        table.cell(dash, 2, row, str_label, bgcolor = bg_color, text_color = str_col, text_size = size.small)
+        table.cell(dash, 3, row, "", bgcolor = bg_color, text_size = size.small)
         row += 1
 
     // S/R (compact)
