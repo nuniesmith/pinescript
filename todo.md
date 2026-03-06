@@ -2,7 +2,7 @@
 # Ruby Pine Script TODO.md
 **Last updated:** March 06, 2026  
 **Status:** 100% production-ready — clean, fast, fully synced with NT8 logic  
-**Version:** Ruby v2.1 – NT8 Sync Edition
+**Version:** Ruby v1.0
 
 ---
 
@@ -40,7 +40,7 @@
   - Reduced visual footprint by ~60%
   - Added master toggle to show/hide entire dashboard
 - [x] All changes verified — no errors
-- [x] **Version Label Added**: Dashboard header now shows "Ruby v2.1 – NT8 Sync"
+- [x] **Version Label Added**: Dashboard header now shows "Ruby v1.0"
 - [x] **Squeeze Wired Into Signals**: `squeeze_fired` now boosts signal quality score and can trigger buy/sell signals on volatility expansion; wave ratio requirement relaxed when squeeze fires
 - [x] **Price Labels in Entry Zones**: Support and resistance boxes now show live price labels (S: / R:) centered inside the zones
 - [x] **Breakout Strength Meter**: 0–100% composite score in dashboard (wave ratio 40%, volume surge 30%, squeeze 15%, trend alignment 15%) with emoji indicator

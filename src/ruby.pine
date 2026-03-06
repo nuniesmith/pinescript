@@ -454,15 +454,6 @@ plotshape(show_ib and ib_breakout_up, title="IB Break Up", style=shape.circle, l
 plotshape(show_ib and ib_breakout_dn, title="IB Break Down", style=shape.circle, location=location.abovebar, color=color.new(color.orange, 0), size=size.tiny)
 plotshape(show_squeeze and squeeze_fired, title="Squeeze Fired", style=shape.diamond, location=location.belowbar, color=color.new(color.yellow, 0), size=size.small)
 
-// Breakout Strength Meter (0–100%)
-// Components: wave ratio strength (40%), volume surge (30%), squeeze state (15%), trend alignment (15%)
-vol_surge_raw = volume / nz(ta.sma(volume, 20), volume)
-vol_surge_score = math.min(vol_surge_raw / 2.0, 1.0) * 30.0
-wave_ratio_score = math.min(math.abs(current_ratio_avg) / 3.0, 1.0) * 40.0
-squeeze_score = squeeze_fired ? 15.0 : squeeze_on ? 10.0 : 0.0
-trend_align_score = (in_uptrend or in_downtrend) and strong_trend_aligned ? 15.0 : (in_uptrend or in_downtrend) ? 7.5 : 0.0
-breakout_strength = math.round(wave_ratio_score + vol_surge_score + squeeze_score + trend_align_score, 1)
-
 // Plot breakout levels
 plot(show_orb and orb_complete ? orb_high : na, "ORB High", color=color.new(color.green, 50), linewidth=1, style=plot.style_linebr)
 plot(show_orb and orb_complete ? orb_low : na, "ORB Low", color=color.new(color.red, 50), linewidth=1, style=plot.style_linebr)
@@ -622,6 +613,16 @@ in_downtrend = market_phase == "DOWNTREND" or (market_phase == "DISTRIBUTION" an
 // ==================================================================================
 rsi_value = rsi_14
 strong_trend_aligned = use_multi_timeframe ? (in_uptrend and close > higher_tf_ma) or (in_downtrend and close < higher_tf_ma) : true
+
+// Breakout Strength Meter (0–100%)
+// Components: wave ratio strength (40%), volume surge (30%), squeeze state (15%), trend alignment (15%)
+vol_surge_raw = volume / nz(ta.sma(volume, 20), volume)
+vol_surge_score = math.min(vol_surge_raw / 2.0, 1.0) * 30.0
+wave_ratio_score = math.min(math.abs(current_ratio_avg) / 3.0, 1.0) * 40.0
+squeeze_score = squeeze_fired ? 15.0 : squeeze_on ? 10.0 : 0.0
+trend_align_score = (in_uptrend or in_downtrend) and strong_trend_aligned ? 15.0 : (in_uptrend or in_downtrend) ? 7.5 : 0.0
+breakout_strength = math.round(wave_ratio_score + vol_surge_score + squeeze_score + trend_align_score, 1)
+
 momentum_change = ta.change(close, momentum_lookback) / nz(close[momentum_lookback], close)
 momentum_stdev = ta.stdev(momentum_change, 100)
 normalized_velocity = momentum_stdev == 0 ? 0 : momentum_change / momentum_stdev
@@ -771,7 +772,7 @@ if show_dashboard and barstate.islast
     table.clear(dash, 0, 0, 3, 27)
 
     // Header (compact)
-    table.cell(dash, 0, 0, "RUBY v2.1 – NT8 Sync", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.normal)
+    table.cell(dash, 0, 0, "RUBY v1.0", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.normal)
     table.merge_cells(dash, 0, 0, 3, 0)
     int row = 1
 
