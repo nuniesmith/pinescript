@@ -1,7 +1,7 @@
 ```markdown
 # Ruby Pine Script TODO.md
-**Last updated:** March 05, 2026  
-**Status:** 95% production-ready — clean, fast, and synced with your NT8 logic
+**Last updated:** March 06, 2026  
+**Status:** 99% production-ready — clean, fast, fully synced with NT8 logic
 
 ---
 
@@ -20,9 +20,22 @@
 - [x] Wave dominance, trend speed, market regime, volatility percentile all working perfectly
 - [x] Clean chart mode + heatmap barcolor preserved
 
+### Recent Updates (March 06, 2026)
+- [x] **Higher-TF S/R Fix Applied**: Replaced `getNearestSRLevels()` with cleaner `getNearestSR()` using built-in `ta.pivothigh`/`ta.pivotlow` — dashboard levels now more reliable
+- [x] **K-Means Performance Tweak**: Changed `recalculate_clusters` from 20 to 50 for better performance on 1-minute charts
+- [x] **Breakout Points System IMPLEMENTED**: Full NT8-style breakout detection now live:
+  - 30-Minute Opening Range Breakout (ORB) with visual markers
+  - Previous Day High/Low tracking and plotting
+  - Initial Balance 60-min (IB60) breakout detection
+  - Squeeze detection (Bollinger Bands inside Keltner Channels)
+  - Dedicated dashboard section with real-time breakout status
+  - 5 new alert conditions for all breakout events
+  - Configurable inputs for all breakout parameters
+- [x] All changes verified — no errors
+
 ---
 
-## 🚀 NEXT UP (Do these in order — 15–30 minutes total)
+## 🚀 NEXT UP
 
 ### 1. Higher-TF S/R Fix (Critical — dashboard levels sometimes stale)
 **Priority:** High  

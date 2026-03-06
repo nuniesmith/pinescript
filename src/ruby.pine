@@ -13,6 +13,7 @@ show_wave_analysis  = input.bool(true,  title = "Show Wave Analysis",         gr
 show_market_regime  = input.bool(true,  title = "Show Market Regime",         group = group_dashboard)
 show_sr_analysis    = input.bool(true,  title = "Show Support/Resistance",    group = group_dashboard)
 show_volatility     = input.bool(true,  title = "Show Volatility Analysis",   group = group_dashboard)
+show_breakout_points = input.bool(true, title = "Show Breakout Points",        group = group_dashboard)
 dashboard_position  = input.string("top_right", title = "Dashboard Position", options = ["top_right", "top_left", "bottom_right", "bottom_left"], group = group_dashboard)
 color_theme         = input.string("dark", title = "Color Theme", options = ["dark", "light"], group = group_dashboard)
 show_plot_values    = input.bool(false, title = "Show Core Plots for Alerts", group = group_dashboard)
@@ -96,7 +97,7 @@ atr_len                 = input.int(14, minval = 1, title = "ATR Length", group 
 volatility_history      = input.int(200, minval = 20, title = "Volatility History Length", group = group_volatility)
 use_kmeans_atr          = input.bool(true, title = "Use K-Means Adaptive ATR", group = group_volatility)
 training_data_period    = input.int(250, minval = 50, title = "Training Data Period", group = group_volatility)
-recalculate_clusters    = input.int(20, minval = 1, title = "Recalculate Every N Bars", group = group_volatility)
+recalculate_clusters    = input.int(50, minval = 1, title = "Recalculate Every N Bars", group = group_volatility)
 highvol                 = input.float(0.8, minval = 0.5, maxval = 1.0, step = 0.1, title = "High Volatility Centroid", group = group_volatility)
 midvol                  = input.float(0.5, minval = 0.3, maxval = 0.8, step = 0.1, title = "Medium Volatility Centroid", group = group_volatility)
 lowvol                  = input.float(0.2, minval = 0.1, maxval = 0.5, step = 0.1, title = "Low Volatility Centroid", group = group_volatility)
@@ -113,6 +114,19 @@ signal_cooldown         = input.int(5, minval = 1, title = "Bars Between Signals
 require_trend_alignment = input.bool(true, title = "Require Trend Alignment", group = group_signal)
 volume_filter           = input.bool(false, title = "Use Volume Filter", group = group_signal)
 min_volume_threshold    = input.float(1.2, minval = 0.5, maxval = 3.0, step = 0.1, title = "Minimum Volume Threshold", group = group_signal)
+
+// Breakout Points Settings
+var group_breakout = "📍 Breakout Points"
+show_orb            = input.bool(true, title = "Show 30-Min Opening Range", group = group_breakout)
+show_prev_day       = input.bool(true, title = "Show Previous Day High/Low", group = group_breakout)
+show_ib             = input.bool(true, title = "Show Initial Balance (60-min)", group = group_breakout)
+show_squeeze        = input.bool(true, title = "Show Squeeze Detection", group = group_breakout)
+orb_length          = input.int(30, minval = 5, title = "ORB Length (minutes)", group = group_breakout)
+ib_length           = input.int(60, minval = 30, title = "IB Length (minutes)", group = group_breakout)
+squeeze_bb_length   = input.int(20, minval = 5, title = "Squeeze BB Length", group = group_breakout)
+squeeze_bb_mult     = input.float(2.0, minval = 0.5, title = "Squeeze BB Multiplier", group = group_breakout)
+squeeze_kc_length   = input.int(20, minval = 5, title = "Squeeze KC Length", group = group_breakout)
+squeeze_kc_mult     = input.float(1.5, minval = 0.5, title = "Squeeze KC Multiplier", group = group_breakout)
 
 // ==================================================================================
 // SESSION MANAGEMENT
@@ -216,10 +230,10 @@ getNearestLevel(price, levels) =>
                 nearest := lvl
     nearest
 
-getNearestSRLevels(tf) =>
-    highs = request.security(syminfo.tickerid, tf, findSwingHighs(high, sr_lookback, sr_threshold, high_highest_len_minus1, high_lowest_len_times2, swing_atr_val), lookahead = barmerge.lookahead_off)
-    lows  = request.security(syminfo.tickerid, tf, findSwingLows(low,  sr_lookback, sr_threshold, low_lowest_len_minus1, low_highest_len_times2, swing_atr_val), lookahead = barmerge.lookahead_off)
-    [getNearestLevel(close, highs), getNearestLevel(close, lows)]
+getNearestSR(tf) =>
+    ph = request.security(syminfo.tickerid, tf, ta.pivothigh(high, sr_lookback, sr_lookback), lookahead = barmerge.lookahead_off)
+    pl = request.security(syminfo.tickerid, tf, ta.pivotlow (low,  sr_lookback, sr_lookback), lookahead = barmerge.lookahead_off)
+    [ph, pl]
 
 // ==================================================================================
 // TREND SPEED + WAVE ANALYSIS
@@ -347,8 +361,8 @@ var float nearest_resistance_5m = na
 var float nearest_support_5m    = na
 
 if include_sr
-    [res1, sup1] = getNearestSRLevels("1")
-    [res5, sup5] = getNearestSRLevels("5")
+    [res1, sup1] = getNearestSR("1")
+    [res5, sup5] = getNearestSR("5")
     nearest_resistance_1m := res1
     nearest_support_1m    := sup1
     nearest_resistance_5m := res5
@@ -358,6 +372,94 @@ long_bias_1m  = include_sr and not na(nearest_support_1m) and not na(nearest_res
 short_bias_1m = include_sr and not na(nearest_support_1m) and not na(nearest_resistance_1m) ? close < nearest_resistance_1m and (nearest_resistance_1m - close < close - nearest_support_1m) : false
 long_bias_5m  = include_sr and not na(nearest_support_5m) and not na(nearest_resistance_5m) ? close > nearest_support_5m and (nearest_resistance_5m - close > close - nearest_support_5m) : false
 short_bias_5m = include_sr and not na(nearest_support_5m) and not na(nearest_resistance_5m) ? close < nearest_resistance_5m and (nearest_resistance_5m - close < close - nearest_support_5m) : false
+
+// ==================================================================================
+// BREAKOUT POINTS (ORB, PREV DAY, IB, SQUEEZE)
+// ==================================================================================
+
+// Previous Day High/Low
+var float prev_day_high = na
+var float prev_day_low = na
+if ta.change(dayofweek) != 0 and barstate.isconfirmed
+    prev_day_high := high[1]
+    prev_day_low := low[1]
+else
+    prev_day_high := nz(prev_day_high, high)
+    prev_day_low := nz(prev_day_low, low)
+
+// 30-Minute Opening Range Breakout
+var float orb_high = na
+var float orb_low = na
+var int orb_bars = 0
+var bool orb_complete = false
+
+if session_started
+    orb_high := high
+    orb_low := low
+    orb_bars := 0
+    orb_complete := false
+
+if not orb_complete and in_session
+    orb_bars += 1
+    orb_high := math.max(orb_high, high)
+    orb_low := math.min(orb_low, low)
+    if orb_bars >= orb_length and barstate.isconfirmed
+        orb_complete := true
+
+orb_breakout_up = orb_complete and close > orb_high and close[1] <= orb_high
+orb_breakout_dn = orb_complete and close < orb_low and close[1] >= orb_low
+
+// Initial Balance (60-min)
+var float ib_high = na
+var float ib_low = na
+var int ib_bars = 0
+var bool ib_complete = false
+
+if session_started
+    ib_high := high
+    ib_low := low
+    ib_bars := 0
+    ib_complete := false
+
+if not ib_complete and in_session
+    ib_bars += 1
+    ib_high := math.max(ib_high, high)
+    ib_low := math.min(ib_low, low)
+    if ib_bars >= ib_length and barstate.isconfirmed
+        ib_complete := true
+
+ib_breakout_up = ib_complete and close > ib_high and close[1] <= ib_high
+ib_breakout_dn = ib_complete and close < ib_low and close[1] >= ib_low
+
+// Squeeze Detection (Bollinger Bands inside Keltner Channels)
+basis = ta.sma(close, squeeze_bb_length)
+dev = squeeze_bb_mult * ta.stdev(close, squeeze_bb_length)
+upper_bb = basis + dev
+lower_bb = basis - dev
+
+ma = ta.sma(close, squeeze_kc_length)
+range_kc = ta.atr(squeeze_kc_length)
+upper_kc = ma + range_kc * squeeze_kc_mult
+lower_kc = ma - range_kc * squeeze_kc_mult
+
+squeeze_on = lower_bb > lower_kc and upper_bb < upper_kc
+squeeze_off = lower_bb <= lower_kc and upper_bb >= upper_kc
+squeeze_fired = squeeze_off and squeeze_on[1]
+
+// Breakout markers
+plotshape(show_orb and orb_breakout_up, title="ORB Break Up", style=shape.triangleup, location=location.belowbar, color=color.new(color.lime, 0), size=size.small)
+plotshape(show_orb and orb_breakout_dn, title="ORB Break Down", style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.small)
+plotshape(show_ib and ib_breakout_up, title="IB Break Up", style=shape.circle, location=location.belowbar, color=color.new(color.aqua, 0), size=size.tiny)
+plotshape(show_ib and ib_breakout_dn, title="IB Break Down", style=shape.circle, location=location.abovebar, color=color.new(color.orange, 0), size=size.tiny)
+plotshape(show_squeeze and squeeze_fired, title="Squeeze Fired", style=shape.diamond, location=location.belowbar, color=color.new(color.yellow, 0), size=size.small)
+
+// Plot breakout levels
+plot(show_orb and orb_complete ? orb_high : na, "ORB High", color=color.new(color.green, 50), linewidth=1, style=plot.style_linebr)
+plot(show_orb and orb_complete ? orb_low : na, "ORB Low", color=color.new(color.red, 50), linewidth=1, style=plot.style_linebr)
+plot(show_ib and ib_complete ? ib_high : na, "IB High", color=color.new(color.aqua, 60), linewidth=1, style=plot.style_linebr)
+plot(show_ib and ib_complete ? ib_low : na, "IB Low", color=color.new(color.orange, 60), linewidth=1, style=plot.style_linebr)
+plot(show_prev_day ? prev_day_high : na, "Prev Day High", color=color.new(color.blue, 70), linewidth=1, style=plot.style_stepline)
+plot(show_prev_day ? prev_day_low : na, "Prev Day Low", color=color.new(color.purple, 70), linewidth=1, style=plot.style_stepline)
 
 // ==================================================================================
 // VOLATILITY ANALYSIS + ADAPTIVE ATR
@@ -703,6 +805,29 @@ if barstate.islast
         table.merge_cells(dash, 0, row, 3, row)
         row += 1
 
+    // BREAKOUT POINTS
+    if show_breakout_points
+        table.cell(dash, 0, row, "BREAKOUT POINTS", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+        table.merge_cells(dash, 0, row, 3, row)
+        row += 1
+        orb_status = orb_complete ? (orb_breakout_up ? "🚀 BROKE UP" : orb_breakout_dn ? "📉 BROKE DOWN" : orb_complete ? "✓ SET" : "⏳ FORMING") : "⏳ FORMING"
+        table.cell(dash, 0, row, "30m ORB:", bgcolor = bg_color, text_color = label_col)
+        table.cell(dash, 1, row, orb_status, bgcolor = bg_color, text_color = orb_breakout_up ? up_c : orb_breakout_dn ? dn_c : orb_complete ? color.orange : neu_c)
+        ib_status = ib_complete ? (ib_breakout_up ? "🚀 BROKE UP" : ib_breakout_dn ? "📉 BROKE DOWN" : "✓ SET") : "⏳ FORMING"
+        table.cell(dash, 2, row, "IB60:", bgcolor = bg_color, text_color = label_col)
+        table.cell(dash, 3, row, ib_status, bgcolor = bg_color, text_color = ib_breakout_up ? up_c : ib_breakout_dn ? dn_c : ib_complete ? color.orange : neu_c)
+        row += 1
+        squeeze_status = squeeze_on ? "💥 SQUEEZE ON" : squeeze_fired ? "🔥 FIRED" : "〰️ OFF"
+        table.cell(dash, 0, row, "Squeeze:", bgcolor = bg_color, text_color = label_col)
+        table.cell(dash, 1, row, squeeze_status, bgcolor = bg_color, text_color = squeeze_on ? color.yellow : squeeze_fired ? up_c : neu_c)
+        prev_day_dist = ((close - prev_day_low) / (prev_day_high - prev_day_low)) * 100
+        table.cell(dash, 2, row, "Prev Day:", bgcolor = bg_color, text_color = label_col)
+        table.cell(dash, 3, row, str.tostring(math.round(prev_day_dist, 0)) + "% range", bgcolor = bg_color, text_color = prev_day_dist > 60 ? up_c : prev_day_dist < 40 ? dn_c : neu_c)
+        row += 1
+        table.cell(dash, 0, row, "", bgcolor = bg_color)
+        table.merge_cells(dash, 0, row, 3, row)
+        row += 1
+
     // S/R
     if show_sr_analysis and include_sr
         table.cell(dash, 0, row, "SUPPORT & RESISTANCE", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
@@ -753,6 +878,11 @@ alertcondition(final_sell, title = "Ruby SELL", message = "{{ticker}} 🔴 RUBY 
 alertcondition(regime_changed, title = "Regime Change", message = "{{ticker}} 🔄 Regime Change Detected")
 alertcondition(session_started, title = "Session Start", message = "{{ticker}} ⏰ Session OPEN")
 alertcondition(session_ended,   title = "Session End",   message = "{{ticker}} ⏰ Session CLOSED")
+alertcondition(orb_breakout_up, title = "ORB Breakout Up", message = "{{ticker}} 🚀 30-Min ORB Breakout UP | High: {{plot('ORB High')}}")
+alertcondition(orb_breakout_dn, title = "ORB Breakout Down", message = "{{ticker}} 📉 30-Min ORB Breakout DOWN | Low: {{plot('ORB Low')}}")
+alertcondition(ib_breakout_up, title = "IB Breakout Up", message = "{{ticker}} 🔵 Initial Balance Breakout UP")
+alertcondition(ib_breakout_dn, title = "IB Breakout Down", message = "{{ticker}} 🟠 Initial Balance Breakout DOWN")
+alertcondition(squeeze_fired, title = "Squeeze Fired", message = "{{ticker}} 💥 SQUEEZE FIRED - Volatility Expansion")
 
 // Hidden plots for alerts
 plot(show_plot_values ? trendspeed : na, "Trend Speed", display = display.none)
