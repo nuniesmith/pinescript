@@ -2,7 +2,8 @@
 
 **All-in-one professional trading indicator for TradingView (Pine Script v6)**
 
-Ruby combines trend speed analysis, wave dominance tracking, multi-timeframe support/resistance, K-Means adaptive volatility, and NT8-style breakout detection into a single clean overlay — with a compact real-time dashboard that tells you everything at a glance.
+Ruby combines trend speed analysis, wave dominance tracking, multi-timeframe support/resistance, K-Means adaptive volatility, and 
+breakout detection into a single clean overlay — with a compact real-time dashboard that tells you everything at a glance.
 
 ---
 
@@ -21,7 +22,7 @@ Ruby combines trend speed analysis, wave dominance tracking, multi-timeframe sup
 - Optional volume filter and trend alignment requirements
 - Entry labels with price, stop-loss, quality %, and wave ratio printed directly on chart
 
-### NT8-Style Breakout Points
+### Breakout Points
 - **30-Minute Opening Range Breakout (ORB)** — high/low plotted with directional markers
 - **Previous Day High/Low** — step-line reference levels
 - **Initial Balance (60-min)** — IB range with breakout detection
