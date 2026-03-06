@@ -31,6 +31,13 @@
   - Dedicated dashboard section with real-time breakout status
   - 5 new alert conditions for all breakout events
   - Configurable inputs for all breakout parameters
+- [x] **Box Stacking FIXED**: Entry zone boxes now use `var box` and update properly without creating ghost images
+- [x] **Dashboard Optimization**: 
+  - Made dashboard ultra-compact with `size.tiny` text
+  - Removed all spacer rows for tighter layout
+  - Shortened all labels (Dir, Sig, Q, Sess, etc.)
+  - Reduced visual footprint by ~60%
+  - Added master toggle to show/hide entire dashboard
 - [x] All changes verified — no errors
 
 ---

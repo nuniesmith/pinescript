@@ -8,6 +8,7 @@ indicator("Ruby", overlay = true, max_labels_count = 500)
 // 📊 DASHBOARD SETTINGS
 // ==================================================================================
 var group_dashboard = "📊 Dashboard Settings"
+show_dashboard      = input.bool(true,  title = "Show Dashboard",             group = group_dashboard)
 show_trend_info     = input.bool(true,  title = "Show Trend Info",            group = group_dashboard)
 show_wave_analysis  = input.bool(true,  title = "Show Wave Analysis",         group = group_dashboard)
 show_market_regime  = input.bool(true,  title = "Show Market Regime",         group = group_dashboard)
@@ -702,15 +703,33 @@ if show_entry_labels
     if final_sell
         label.new(x=bar_index, y=high + atr_14, text="SELL\nEntry: " + str.tostring(close, "#.####") + "\nSL: " + str.tostring(short_sl, "#.####") + "\nQuality: " + str.tostring(signal_quality_score * 100, "#.#") + "%\nWave: " + str.tostring(math.abs(current_ratio_avg), "#.##") + "x", color=color.new(color.red, 20), style=label.style_label_down, textcolor=color.black, size=size.normal)
 
-// Entry zones
-if show_entry_zones and barstate.islast
-    box.new(bar_index[20], lowest_src, bar_index, lowest_src + (highest_src - lowest_src) * 0.1, bgcolor = color.new(color.aqua, 90), border_color = color.new(color.green, 70))
-    box.new(bar_index[20], highest_src, bar_index, highest_src - (highest_src - lowest_src) * 0.1, bgcolor = color.new(color.yellow, 90), border_color = color.new(color.red, 70))
+// Entry zones (fixed - no more ghost boxes)
+var box support_zone = na
+var box resistance_zone = na
+
+if show_entry_zones
+    if barstate.islast
+        support_bottom = lowest_src
+        support_top = lowest_src + (highest_src - lowest_src) * 0.1
+        resistance_bottom = highest_src - (highest_src - lowest_src) * 0.1
+        resistance_top = highest_src
+        
+        if na(support_zone)
+            support_zone := box.new(bar_index[20], support_bottom, bar_index, support_top, bgcolor = color.new(color.aqua, 90), border_color = color.new(color.green, 70))
+        else
+            box.set_lefttop(support_zone, bar_index[20], support_top)
+            box.set_rightbottom(support_zone, bar_index, support_bottom)
+        
+        if na(resistance_zone)
+            resistance_zone := box.new(bar_index[20], resistance_top, bar_index, resistance_bottom, bgcolor = color.new(color.yellow, 90), border_color = color.new(color.red, 70))
+        else
+            box.set_lefttop(resistance_zone, bar_index[20], resistance_top)
+            box.set_rightbottom(resistance_zone, bar_index, resistance_bottom)
 
 // ==================================================================================
 // 📊 DASHBOARD TABLE
 // ==================================================================================
-if barstate.islast
+if show_dashboard and barstate.islast
     dash_pos = dashboard_position == "top_right" ? position.top_right : dashboard_position == "top_left" ? position.top_left : dashboard_position == "bottom_right" ? position.bottom_right : position.bottom_left
 
     bg_color   = color_theme == "dark" ? color.rgb(0,0,0,90)   : color.rgb(255,255,255,90)
@@ -725,149 +744,107 @@ if barstate.islast
 
     table.clear(dash, 0, 0, 3, 24)
 
-    // Header
-    table.cell(dash, 0, 0, "RUBY DASHBOARD", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+    // Header (compact)
+    table.cell(dash, 0, 0, "RUBY", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.normal)
     table.merge_cells(dash, 0, 0, 3, 0)
     int row = 1
 
-    // TREND INFO
+    // TREND INFO (compact)
     if show_trend_info
-        table.cell(dash, 0, row, "TREND INFORMATION", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+        table.cell(dash, 0, row, "TREND", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.small)
         table.merge_cells(dash, 0, row, 3, row)
         row += 1
 
-        trend_dir = trendspeed > 0 ? "BULLISH ↗️" : trendspeed < 0 ? "BEARISH ↘️" : "NEUTRAL ↔️"
-        table.cell(dash, 0, row, "Direction:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, trend_dir, bgcolor = bg_color, text_color = trendspeed > 0 ? up_c : trendspeed < 0 ? dn_c : neu_c)
-        table.cell(dash, 2, row, "Speed:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, str.tostring(math.round(trendspeed, 4)), bgcolor = bg_color, text_color = trendspeed > 0 ? up_c : trendspeed < 0 ? dn_c : neu_c)
+        trend_dir = trendspeed > 0 ? "↗️" : trendspeed < 0 ? "↘️" : "↔️"
+        table.cell(dash, 0, row, "Dir:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, trend_dir, bgcolor = bg_color, text_color = trendspeed > 0 ? up_c : trendspeed < 0 ? dn_c : neu_c, text_size = size.small)
+        sig_status = final_buy ? "BUY" : final_sell ? "SELL" : math.abs(current_ratio_avg) >= 1.3 ? (current_ratio_avg > 0 ? "BULL" : "BEAR") : "---"
+        table.cell(dash, 2, row, "Sig:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, sig_status, bgcolor = bg_color, text_color = final_buy ? up_c : final_sell ? dn_c : math.abs(current_ratio_avg) >= 1.3 ? (current_ratio_avg > 0 ? color.new(up_c,40) : color.new(dn_c,40)) : neu_c, text_size = size.small)
         row += 1
 
-        strength_cat = current_ratio_avg > 2.0 ? "Very Strong" : current_ratio_avg > 1.5 ? "Strong" : current_ratio_avg > 1.0 ? "Moderate" : current_ratio_avg > 0.5 ? "Weak" : "Very Weak"
-        table.cell(dash, 0, row, "Strength:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, strength_cat, bgcolor = bg_color, text_color = strength_cat == "Very Strong" ? up_c : strength_cat == "Strong" ? color.new(up_c,20) : strength_cat == "Moderate" ? color.orange : color.gray)
-        table.cell(dash, 2, row, "Signal:", bgcolor = bg_color, text_color = label_col)
-        sig_status = final_buy ? "BUY SIGNAL" : final_sell ? "SELL SIGNAL" : math.abs(current_ratio_avg) >= 1.3 ? (current_ratio_avg > 0 ? "BULLISH WAVE" : "BEARISH WAVE") : "NO SIGNAL"
-        table.cell(dash, 3, row, sig_status, bgcolor = bg_color, text_color = final_buy ? up_c : final_sell ? dn_c : math.abs(current_ratio_avg) >= 1.3 ? (current_ratio_avg > 0 ? color.new(up_c,40) : color.new(dn_c,40)) : neu_c)
+        table.cell(dash, 0, row, "Q:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, str.tostring(math.round(signal_quality_score * 100, 0)) + "%", bgcolor = bg_color, text_color = signal_quality_score > 0.7 ? up_c : signal_quality_score > 0.5 ? color.orange : dn_c, text_size = size.small)
+        table.cell(dash, 2, row, "Sess:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, in_session ? "ON" : "OFF", bgcolor = bg_color, text_color = in_session ? up_c : dn_c, text_size = size.small)
         row += 1
 
-        table.cell(dash, 0, row, "Quality:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, str.tostring(math.round(signal_quality_score * 100, 1)) + "%", bgcolor = bg_color, text_color = signal_quality_score > 0.7 ? up_c : signal_quality_score > 0.5 ? color.orange : dn_c)
-        table.cell(dash, 2, row, "Session:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, in_session ? "ACTIVE" : "INACTIVE", bgcolor = bg_color, text_color = in_session ? up_c : dn_c)
-        row += 1
-        table.cell(dash, 0, row, "", bgcolor = bg_color)
-        table.merge_cells(dash, 0, row, 3, row)
-        row += 1
-
-    // WAVE ANALYSIS
+    // WAVE ANALYSIS (compact)
     if show_wave_analysis
-        table.cell(dash, 0, row, "WAVE ANALYSIS", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+        table.cell(dash, 0, row, "WAVE", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.small)
         table.merge_cells(dash, 0, row, 3, row)
         row += 1
-        table.cell(dash, 0, row, "Wave Ratio:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, wave_size_text_avg, bgcolor = bg_color, text_color = wave_size_ratio_avg > 1 ? color.lime : color.red)
-        table.cell(dash, 2, row, "Current:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, current_text_avg, bgcolor = bg_color, text_color = current_ratio_avg > 0 ? color.lime : color.red)
+        table.cell(dash, 0, row, "Ratio:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, wave_size_text_avg, bgcolor = bg_color, text_color = wave_size_ratio_avg > 1 ? color.lime : color.red, text_size = size.small)
+        table.cell(dash, 2, row, "Curr:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, current_text_avg, bgcolor = bg_color, text_color = current_ratio_avg > 0 ? color.lime : color.red, text_size = size.small)
         row += 1
-        table.cell(dash, 0, row, "Dominance:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, dominance_avg_text, bgcolor = bg_color, text_color = dominance_avg_value > 0 ? color.lime : color.red)
-        table.cell(dash, 2, row, "Bias:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, market_bias, bgcolor = bg_color, text_color = market_bias == "Bullish" ? up_c : market_bias == "Bearish" ? dn_c : neu_c)
-        row += 1
-        table.cell(dash, 0, row, "Bull Avg:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, str.tostring(math.round(bull_avg, 4)), bgcolor = bg_color, text_color = up_c)
-        table.cell(dash, 2, row, "Bear Avg:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, str.tostring(math.round(bear_avg, 4)), bgcolor = bg_color, text_color = dn_c)
-        row += 1
-        table.cell(dash, 0, row, "", bgcolor = bg_color)
-        table.merge_cells(dash, 0, row, 3, row)
+        table.cell(dash, 0, row, "Dom:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, dominance_avg_text, bgcolor = bg_color, text_color = dominance_avg_value > 0 ? color.lime : color.red, text_size = size.small)
+        table.cell(dash, 2, row, "Bias:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, market_bias, bgcolor = bg_color, text_color = market_bias == "Bullish" ? up_c : market_bias == "Bearish" ? dn_c : neu_c, text_size = size.small)
         row += 1
 
-    // MARKET REGIME
+    // MARKET REGIME (compact)
     if show_market_regime
-        table.cell(dash, 0, row, "MARKET REGIME", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+        table.cell(dash, 0, row, "REGIME", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.small)
         table.merge_cells(dash, 0, row, 3, row)
         row += 1
         regime_emoji = market_regime == "TRENDING BULL" ? "🐂" : market_regime == "TRENDING BEAR" ? "🐻" : market_regime == "VOLATILE" ? "⚡" : market_regime == "RANGING" ? "↔️" : "⚖️"
-        table.cell(dash, 0, row, "Regime:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, regime_emoji + " " + market_regime, bgcolor = bg_color, text_color = market_regime == "TRENDING BULL" ? up_c : market_regime == "TRENDING BEAR" ? dn_c : market_regime == "VOLATILE" ? color.orange : market_regime == "RANGING" ? color.blue : neu_c)
+        table.cell(dash, 0, row, regime_emoji, bgcolor = bg_color, text_color = market_regime == "TRENDING BULL" ? up_c : market_regime == "TRENDING BEAR" ? dn_c : market_regime == "VOLATILE" ? color.orange : neu_c, text_size = size.small)
         phase_emoji = market_phase == "UPTREND" ? "🚀" : market_phase == "DOWNTREND" ? "🧸" : market_phase == "ACCUMULATION" ? "🏗️" : "📦"
-        table.cell(dash, 2, row, "Phase:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, phase_emoji + " " + market_phase, bgcolor = bg_color, text_color = phase_color)
-        row += 1
-        table.cell(dash, 0, row, "Momentum:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, (AO > 0 ? "BULLISH" : "BEARISH") + (AO > AO[5] ? " ↗️" : " ↘️"), bgcolor = bg_color, text_color = AO > 0 ? up_c : dn_c)
-        table.cell(dash, 2, row, "RSI:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, (rsi_value > 60 ? "BULLISH" : rsi_value < 40 ? "BEARISH" : "NEUTRAL") + " (" + str.tostring(math.round(rsi_value, 1)) + ")", bgcolor = bg_color, text_color = rsi_value > 60 ? up_c : rsi_value < 40 ? dn_c : neu_c)
-        row += 1
-        table.cell(dash, 0, row, "", bgcolor = bg_color)
-        table.merge_cells(dash, 0, row, 3, row)
+        table.cell(dash, 1, row, phase_emoji, bgcolor = bg_color, text_color = phase_color, text_size = size.small)
+        table.cell(dash, 2, row, "RSI:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, str.tostring(math.round(rsi_value, 0)), bgcolor = bg_color, text_color = rsi_value > 60 ? up_c : rsi_value < 40 ? dn_c : neu_c, text_size = size.small)
         row += 1
 
-    // BREAKOUT POINTS
+    // BREAKOUT POINTS (compact)
     if show_breakout_points
-        table.cell(dash, 0, row, "BREAKOUT POINTS", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+        table.cell(dash, 0, row, "BREAKOUTS", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.small)
         table.merge_cells(dash, 0, row, 3, row)
         row += 1
-        orb_status = orb_complete ? (orb_breakout_up ? "🚀 BROKE UP" : orb_breakout_dn ? "📉 BROKE DOWN" : orb_complete ? "✓ SET" : "⏳ FORMING") : "⏳ FORMING"
-        table.cell(dash, 0, row, "30m ORB:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, orb_status, bgcolor = bg_color, text_color = orb_breakout_up ? up_c : orb_breakout_dn ? dn_c : orb_complete ? color.orange : neu_c)
-        ib_status = ib_complete ? (ib_breakout_up ? "🚀 BROKE UP" : ib_breakout_dn ? "📉 BROKE DOWN" : "✓ SET") : "⏳ FORMING"
-        table.cell(dash, 2, row, "IB60:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, ib_status, bgcolor = bg_color, text_color = ib_breakout_up ? up_c : ib_breakout_dn ? dn_c : ib_complete ? color.orange : neu_c)
+        orb_status = orb_breakout_up ? "🚀" : orb_breakout_dn ? "📉" : orb_complete ? "✓" : "⏳"
+        table.cell(dash, 0, row, "ORB:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, orb_status, bgcolor = bg_color, text_color = orb_breakout_up ? up_c : orb_breakout_dn ? dn_c : orb_complete ? color.orange : neu_c, text_size = size.small)
+        ib_status = ib_breakout_up ? "🚀" : ib_breakout_dn ? "📉" : ib_complete ? "✓" : "⏳"
+        table.cell(dash, 2, row, "IB:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, ib_status, bgcolor = bg_color, text_color = ib_breakout_up ? up_c : ib_breakout_dn ? dn_c : ib_complete ? color.orange : neu_c, text_size = size.small)
         row += 1
-        squeeze_status = squeeze_on ? "💥 SQUEEZE ON" : squeeze_fired ? "🔥 FIRED" : "〰️ OFF"
-        table.cell(dash, 0, row, "Squeeze:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, squeeze_status, bgcolor = bg_color, text_color = squeeze_on ? color.yellow : squeeze_fired ? up_c : neu_c)
+        squeeze_status = squeeze_on ? "💥" : squeeze_fired ? "🔥" : "〰️"
+        table.cell(dash, 0, row, "Sqz:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, squeeze_status, bgcolor = bg_color, text_color = squeeze_on ? color.yellow : squeeze_fired ? up_c : neu_c, text_size = size.small)
         prev_day_dist = ((close - prev_day_low) / (prev_day_high - prev_day_low)) * 100
-        table.cell(dash, 2, row, "Prev Day:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, str.tostring(math.round(prev_day_dist, 0)) + "% range", bgcolor = bg_color, text_color = prev_day_dist > 60 ? up_c : prev_day_dist < 40 ? dn_c : neu_c)
-        row += 1
-        table.cell(dash, 0, row, "", bgcolor = bg_color)
-        table.merge_cells(dash, 0, row, 3, row)
+        table.cell(dash, 2, row, "PD:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, str.tostring(math.round(prev_day_dist, 0)) + "%", bgcolor = bg_color, text_color = prev_day_dist > 60 ? up_c : prev_day_dist < 40 ? dn_c : neu_c, text_size = size.small)
         row += 1
 
-    // S/R
+    // S/R (compact)
     if show_sr_analysis and include_sr
-        table.cell(dash, 0, row, "SUPPORT & RESISTANCE", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+        table.cell(dash, 0, row, "S/R", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.small)
         table.merge_cells(dash, 0, row, 3, row)
         row += 1
-        table.cell(dash, 0, row, "1m Bias:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, long_bias_1m ? "LONG" : short_bias_1m ? "SHORT" : "NEUTRAL", bgcolor = bg_color, text_color = long_bias_1m ? up_c : short_bias_1m ? dn_c : neu_c)
-        table.cell(dash, 2, row, "5m Bias:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, long_bias_5m ? "LONG" : short_bias_5m ? "SHORT" : "NEUTRAL", bgcolor = bg_color, text_color = long_bias_5m ? up_c : short_bias_5m ? dn_c : neu_c)
-        row += 1
-        table.cell(dash, 0, row, "1m Support:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, str.tostring(nearest_support_1m, format.mintick), bgcolor = bg_color, text_color = up_c)
-        table.cell(dash, 2, row, "5m Support:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, str.tostring(nearest_support_5m, format.mintick), bgcolor = bg_color, text_color = up_c)
-        row += 1
-        table.cell(dash, 0, row, "1m Resist:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, str.tostring(nearest_resistance_1m, format.mintick), bgcolor = bg_color, text_color = dn_c)
-        table.cell(dash, 2, row, "5m Resist:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, str.tostring(nearest_resistance_5m, format.mintick), bgcolor = bg_color, text_color = dn_c)
-        row += 1
-        table.cell(dash, 0, row, "", bgcolor = bg_color)
-        table.merge_cells(dash, 0, row, 3, row)
+        table.cell(dash, 0, row, "1m:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, long_bias_1m ? "L" : short_bias_1m ? "S" : "N", bgcolor = bg_color, text_color = long_bias_1m ? up_c : short_bias_1m ? dn_c : neu_c, text_size = size.small)
+        table.cell(dash, 2, row, "5m:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, long_bias_5m ? "L" : short_bias_5m ? "S" : "N", bgcolor = bg_color, text_color = long_bias_5m ? up_c : short_bias_5m ? dn_c : neu_c, text_size = size.small)
         row += 1
 
-    // VOLATILITY
+    // VOLATILITY (compact)
     if show_volatility
-        table.cell(dash, 0, row, "VOLATILITY ANALYSIS", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center)
+        table.cell(dash, 0, row, "VOL", bgcolor = header_bg, text_color = text_color, text_halign = text.align_center, text_size = size.small)
         table.merge_cells(dash, 0, row, 3, row)
         row += 1
-        table.cell(dash, 0, row, "ATR:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, str.tostring(math.round(atr_14, 5)), bgcolor = bg_color, text_color = text_color)
-        table.cell(dash, 2, row, "Percentile:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, str.tostring(math.round(vol_percentile * 100, 1)) + "%", bgcolor = bg_color, text_color = text_color)
+        table.cell(dash, 0, row, "ATR:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 1, row, str.tostring(math.round(atr_14, 5)), bgcolor = bg_color, text_color = text_color, text_size = size.small)
+        table.cell(dash, 2, row, "%ile:", bgcolor = bg_color, text_color = label_col, text_size = size.small)
+        table.cell(dash, 3, row, str.tostring(math.round(vol_percentile * 100, 0)) + "%", bgcolor = bg_color, text_color = text_color, text_size = size.small)
         row += 1
         vol_emoji = vol_regime == "VERY HIGH" ? "⚡⚡" : vol_regime == "HIGH" ? "⚡" : vol_regime == "VERY LOW" ? "🧘🧘" : vol_regime == "LOW" ? "🧘" : "〰️"
-        table.cell(dash, 0, row, "Vol Regime:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 1, row, vol_emoji + " " + vol_regime, bgcolor = bg_color, text_color = vol_regime == "VERY HIGH" ? dn_c : vol_regime == "HIGH" ? color.orange : vol_regime == "VERY LOW" ? up_c : neu_c)
-        vol_strat = vol_percentile > 0.8 ? "AVOID TIGHT STOPS" : vol_percentile < 0.2 ? "BREAKOUT WATCH" : vol_percentile > 0.6 ? "WIDER STOPS" : vol_percentile < 0.4 ? "TIGHTER STOPS" : "NORMAL STOPS"
-        table.cell(dash, 2, row, "Strategy:", bgcolor = bg_color, text_color = label_col)
-        table.cell(dash, 3, row, vol_strat, bgcolor = bg_color, text_color = vol_percentile > 0.8 ? dn_c : vol_percentile < 0.2 ? up_c : vol_percentile > 0.6 ? color.orange : color.new(up_c, 40))
+        table.cell(dash, 0, row, vol_emoji, bgcolor = bg_color, text_color = vol_regime == "VERY HIGH" ? dn_c : vol_regime == "HIGH" ? color.orange : vol_regime == "VERY LOW" ? up_c : neu_c, text_size = size.small)
+        vol_strat = vol_percentile > 0.8 ? "AVOID" : vol_percentile < 0.2 ? "BRKOUT" : vol_percentile > 0.6 ? "WIDE" : vol_percentile < 0.4 ? "TIGHT" : "NORM"
+        table.cell(dash, 1, row, vol_strat, bgcolor = bg_color, text_color = vol_percentile > 0.8 ? dn_c : vol_percentile < 0.2 ? up_c : vol_percentile > 0.6 ? color.orange : color.new(up_c, 40), text_size = size.small)
+        table.cell(dash, 2, row, "", bgcolor = bg_color, text_size = size.small)
+        table.cell(dash, 3, row, "", bgcolor = bg_color, text_size = size.small)
         row += 1
 
 // ==================================================================================
