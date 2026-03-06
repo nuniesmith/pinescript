@@ -118,4 +118,4 @@ Ruby is fully configurable through grouped inputs:
 
 [Mozilla Public License 2.0](https://mozilla.org/MPL/2.0/)
 
-© nuniesmith
+© nuniesmith 2026
